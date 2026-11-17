@@ -214,7 +214,6 @@ export default function Home() {
       setRecordSuccess("Registro salvo. A autoria foi vinculada à sua conta.");
       setRecordForm({});
       setRecordsRefresh((value) => value + 1);
-      setShowNewRecord(false);
     }
     setRecordBusy(false);
   }
