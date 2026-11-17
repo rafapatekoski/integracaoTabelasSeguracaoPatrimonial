@@ -37,6 +37,55 @@ const modules: ModuleData[] = [
 
 type DbRecord = Record<string, unknown> & { created_by?: string | null };
 type Profile = { id: string; display_name: string };
+
+type FormField = { name: string; label: string; type?: string; required?: boolean; options?: string[] };
+type RecordFormConfig = { table: string; fields: FormField[] };
+const recordForms: Record<string, RecordFormConfig> = {
+  transito: { table: "traffic_inspections", fields: [
+    { name: "inspected_at", label: "Data", type: "date", required: true },
+    { name: "activity_type", label: "Tipo de ação", required: true },
+    { name: "vehicle", label: "Veículo" }, { name: "plate", label: "Placa" },
+    { name: "violation", label: "Infração / observação" },
+    { name: "status", label: "Status", options: ["Em análise", "Pendente", "Aprovado", "Solucionado", "Reprovado"] },
+  ] },
+  etilometro: { table: "breathalyzer_tests", fields: [
+    { name: "tested_at", label: "Data", type: "date", required: true },
+    { name: "shift", label: "Período", options: ["Manhã", "Tarde", "Noite"] },
+    { name: "employee_registry", label: "Matrícula" }, { name: "company", label: "Empresa" },
+    { name: "result", label: "Resultado", options: ["Negativo", "Positivo"] },
+    { name: "worker_type", label: "Vínculo", options: ["Próprio", "Terceiro"] },
+  ] },
+  veiculos: { table: "fuel_records", fields: [
+    { name: "recorded_on", label: "Data", type: "date", required: true },
+    { name: "vehicle", label: "Veículo", required: true },
+    { name: "distance_km", label: "KM rodado", type: "number" },
+    { name: "fuel_type", label: "Combustível", options: ["Etanol", "Gasolina", "Diesel", "Outro"] },
+    { name: "total_paid", label: "Valor pago (R$)", type: "number" },
+    { name: "driver_name", label: "Condutor" },
+  ] },
+  caminhoes: { table: "truck_weighings", fields: [
+    { name: "weighed_at", label: "Data da pesagem", type: "date", required: true },
+    { name: "plate", label: "Placa", required: true },
+    { name: "carrier", label: "Transportadora" }, { name: "product", label: "Produto" },
+    { name: "measured_weight_kg", label: "Peso aferido (kg)", type: "number" },
+    { name: "anomaly", label: "Anomalia / observação" },
+  ] },
+  metais: { table: "metal_detector_logs", fields: [
+    { name: "recorded_at", label: "Data e horário", type: "datetime-local", required: true },
+    { name: "direction", label: "Movimento", options: ["Entrada", "Saída"] },
+    { name: "location", label: "Local", required: true },
+    { name: "quantity", label: "Quantidade", type: "number" },
+    { name: "occurrence", label: "Ocorrência / observação" },
+  ] },
+  equipamentos: { table: "equipment_failures", fields: [
+    { name: "failed_at", label: "Data e horário da falha", type: "datetime-local", required: true },
+    { name: "equipment", label: "Equipamento", required: true },
+    { name: "sector", label: "Setor" }, { name: "failure", label: "Falha", required: true },
+    { name: "status", label: "Status", options: ["Em andamento", "Concluído"] },
+    { name: "returned_at", label: "Data e horário do retorno", type: "datetime-local" },
+  ] },
+};
+
 const display = (value: unknown, fallback = "—") => value === null || value === undefined || value === "" ? fallback : String(value);
 const dateValue = (value: unknown) => value ? String(value).slice(0, 10) : "—";
 const timeValue = (value: unknown) => value ? String(value).slice(11, 16) || String(value).slice(0, 5) : "—";
@@ -76,6 +125,13 @@ export default function Home() {
   const [databaseRows, setDatabaseRows] = useState<Record<string, string[][]>>({});
   const [dataLoading, setDataLoading] = useState(false);
   const [dataError, setDataError] = useState("");
+  const [recordsRefresh, setRecordsRefresh] = useState(0);
+  const [showNewRecord, setShowNewRecord] = useState(false);
+  const [newRecordModule, setNewRecordModule] = useState("transito");
+  const [recordForm, setRecordForm] = useState<Record<string, string>>({});
+  const [recordBusy, setRecordBusy] = useState(false);
+  const [recordError, setRecordError] = useState("");
+  const [recordSuccess, setRecordSuccess] = useState("");
   const hasSupabaseConfig = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
   const supabase = useMemo(() => hasSupabaseConfig ? createClient() : null, [hasSupabaseConfig]);
 
@@ -120,7 +176,7 @@ export default function Home() {
     }
     loadData().catch((error: unknown) => { if (!cancelled) setDataError(error instanceof Error ? error.message : "Não foi possível carregar os registros."); }).finally(() => { if (!cancelled) setDataLoading(false); });
     return () => { cancelled = true; };
-  }, [supabase, authUser]);
+  }, [supabase, authUser, recordsRefresh]);
 
   const viewModules = useMemo(() => authUser ? modules.map((module) => ({ ...module, rows: databaseRows[module.id] ?? [] })) : modules, [authUser, databaseRows]);
   const selectedModule = viewModules.find((module) => module.id === current);
@@ -139,6 +195,38 @@ export default function Home() {
     setLoginBusy(false);
   }
   async function handleLogout() { await supabase?.auth.signOut(); setCurrent("inicio"); }
+
+  async function handleCreateRecord(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setRecordError(""); setRecordSuccess("");
+    if (!supabase || !authUser) { setRecordError("Entre no sistema para criar registros."); return; }
+    const config = recordForms[newRecordModule];
+    if (!config) { setRecordError("Selecione um módulo válido."); return; }
+    setRecordBusy(true);
+    const payload: Record<string, string | number | null> = {};
+    for (const field of config.fields) {
+      const value = recordForm[field.name]?.trim() ?? "";
+      if (!value) continue;
+      payload[field.name] = field.type === "number" ? Number(value) : value;
+    }
+    const { error } = await supabase.from(config.table).insert(payload);
+    if (error) setRecordError(error.message);
+    else {
+      setRecordSuccess("Registro salvo. A autoria foi vinculada à sua conta.");
+      setRecordForm({});
+      setRecordsRefresh((value) => value + 1);
+      setShowNewRecord(false);
+    }
+    setRecordBusy(false);
+  }
+
+  function openNewRecord() {
+    setNewRecordModule(current !== "inicio" && recordForms[current] ? current : "transito");
+    setRecordForm({});
+    setRecordError("");
+    setRecordSuccess("");
+    setShowNewRecord(true);
+  }
+
 
   async function handlePasswordRecovery(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setRecoveryError(""); setRecoveryMessage(""); setRecoveryBusy(true);
@@ -212,7 +300,9 @@ export default function Home() {
       </aside>
 
       <main className="min-w-0">
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-white/10 bg-zinc-950/80 px-4 backdrop-blur-xl sm:px-7"><p className="text-xs text-zinc-500">Operação <span className="px-1.5 text-zinc-700">/</span><span className="text-zinc-300">{current === "inicio" ? "Visão geral" : selectedModule?.name}</span></p><div className="flex items-center gap-3"><span className="rounded-full border border-white/10 bg-zinc-900 px-2.5 py-1 text-[10px] font-medium text-zinc-300">● {authUser ? authUser.email : "Dados de exemplo"}</span>{authUser && <button onClick={handleLogout} className="rounded-lg border border-white/10 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800">Sair</button>}<div className="grid size-8 place-items-center rounded-full border border-white/10 bg-zinc-800 text-[10px] font-semibold text-zinc-300">{authUser ? "U" : "AD"}</div></div></header>
+        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-white/10 bg-zinc-950/80 px-4 backdrop-blur-xl sm:px-7"><p className="text-xs text-zinc-500">Operação <span className="px-1.5 text-zinc-700">/</span><span className="text-zinc-300">{current === "inicio" ? "Visão geral" : selectedModule?.name}</span></p><div className="flex items-center gap-3">{authUser && <button onClick={openNewRecord} className="rounded-lg bg-lime-300 px-3 py-2 text-xs font-semibold text-zinc-950 transition-colors hover:bg-lime-200">+ Novo registro</button>}<span className="rounded-full border border-white/10 bg-zinc-900 px-2.5 py-1 text-[10px] font-medium text-zinc-300">● {authUser ? authUser.email : "Dados de exemplo"}</span>{authUser && <button onClick={handleLogout} className="rounded-lg border border-white/10 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800">Sair</button>}<div className="grid size-8 place-items-center rounded-full border border-white/10 bg-zinc-800 text-[10px] font-semibold text-zinc-300">{authUser ? "U" : "AD"}</div></div></header>
+
+        {showNewRecord && authUser && <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"><form onSubmit={handleCreateRecord} className="my-auto w-full max-w-2xl rounded-2xl border border-white/10 bg-zinc-900 p-5 shadow-2xl sm:p-7"><div className="mb-6 flex items-start justify-between gap-4"><div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-lime-300/80">Novo lançamento</p><h2 className="mt-1 text-xl font-medium tracking-tight text-zinc-100">Criar registro operacional</h2><p className="mt-1 text-sm text-zinc-400">O autor será identificado automaticamente pela sua conta.</p></div><button type="button" onClick={() => setShowNewRecord(false)} aria-label="Fechar formulário" className="rounded-lg border border-white/10 px-3 py-2 text-sm text-zinc-400 transition hover:bg-zinc-800 hover:text-white">✕</button></div><label htmlFor="record-module" className="mb-2 block text-xs text-zinc-400">Módulo</label><select id="record-module" value={newRecordModule} onChange={(event) => { setNewRecordModule(event.target.value); setRecordForm({}); }} className="mb-5 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-lime-300/50">{modules.map((module) => <option key={module.id} value={module.id}>{module.name}</option>)}</select><div className="grid gap-4 sm:grid-cols-2">{(recordForms[newRecordModule]?.fields ?? []).map((field) => <label key={field.name} className="block"><span className="mb-2 block text-xs text-zinc-400">{field.label}{field.required ? " *" : ""}</span>{field.options ? <select required={field.required} value={recordForm[field.name] ?? ""} onChange={(event) => setRecordForm((currentForm) => ({ ...currentForm, [field.name]: event.target.value }))} className="w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-lime-300/50"><option value="">Selecione</option>{field.options.map((option) => <option key={option} value={option}>{option}</option>)}</select> : <input required={field.required} type={field.type ?? "text"} step={field.type === "number" ? "any" : undefined} value={recordForm[field.name] ?? ""} onChange={(event) => setRecordForm((currentForm) => ({ ...currentForm, [field.name]: event.target.value }))} className="w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-lime-300/50"/>}</label>)}</div>{recordError && <p role="alert" className="mt-4 rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{recordError}</p>}{recordSuccess && <p role="status" className="mt-4 text-xs text-emerald-300">{recordSuccess}</p>}<div className="mt-6 flex justify-end gap-2 border-t border-white/10 pt-4"><button type="button" onClick={() => setShowNewRecord(false)} className="rounded-lg border border-white/10 px-4 py-2.5 text-sm text-zinc-300 transition hover:bg-zinc-800">Cancelar</button><button disabled={recordBusy} className="rounded-lg bg-lime-300 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-lime-200 disabled:opacity-60">{recordBusy ? "Salvando…" : "Salvar registro"}</button></div></form></div>}
         <div className="mx-auto max-w-[1500px] px-4 py-7 sm:px-7 lg:px-9">
           <div className="mb-6 flex flex-col justify-between gap-5 xl:flex-row xl:items-end"><div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-lime-300/80">Painel operacional</p><h1 className="mt-2 text-2xl font-medium tracking-tight text-zinc-100 sm:text-[28px]">{current === "inicio" ? "Visão geral" : selectedModule?.name}</h1><p className="mt-1.5 text-sm text-zinc-400">{current === "inicio" ? "Acompanhe os principais registros das áreas em um só lugar." : `${selectedModule?.description}.`}</p></div>
             <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-zinc-900/50 p-1.5 backdrop-blur-md"><select value={period} onChange={(event) => setPeriod(event.target.value)} className="rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-xs text-zinc-300 outline-none transition-colors focus:border-white/20"><option value="todos">Todo o período</option><option value="novembro">Novembro 2026</option><option value="outubro">Outubro 2026</option></select><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar nos registros..." aria-label="Buscar nos registros" className="min-w-[175px] flex-1 rounded-lg border border-white/10 bg-zinc-900/80 px-3 py-2 text-xs text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/20 sm:w-52 sm:flex-none"/><button onClick={exportCsv} className="rounded-lg border border-white/10 bg-transparent px-3 py-2 text-xs font-medium text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-white">Exportar CSV</button></div>
