@@ -1,8 +1,8 @@
-# Integração de Tabelas — Segurança Patrimonial
+# Painel Operacional — Segurança Patrimonial
 
-Protótipo estático de um painel operacional integrado. A interface usa somente dados fictícios para demonstrar módulos, busca, filtro por período e exportação CSV.
+Demonstração de um painel integrado em Next.js, React e Tailwind CSS. Todos os dados são inventados e servem apenas para testar a interface.
 
-## Módulos demonstrados
+## Módulos
 
 - Indicadores de trânsito
 - Etilômetro
@@ -11,15 +11,19 @@ Protótipo estático de um painel operacional integrado. A interface usa somente
 - Detector de metais
 - Equipamentos offline
 
-Cada módulo contém cinco registros de exemplo e uma coluna de autoria simulada. Não há login, banco de dados nem persistência de alterações.
+Cada módulo exibe cinco linhas fictícias e uma autoria simulada. O painel geral reúne indicadores, gráfico, atividade recente e atalhos. Inclui busca, filtro por período e exportação CSV. Ainda não há autenticação, banco de dados nem gravação de alterações.
 
-## Executar
+## Executar localmente
 
-Abra `index.html` em um navegador. O projeto não exige instalação de dependências ou etapa de build.
+Requer Node.js 20.9 ou superior.
 
-## Próximas etapas
+```bash
+npm install
+npm run dev
+``
 
-- Migrar os dados para um banco PostgreSQL
-- Implementar autenticação e perfis de acesso
-- Registrar automaticamente autor, data de criação e histórico de alterações
-- Importar e validar os dados históricos das planilhas
+Abra http://localhost:3000. Para gerar a versão de produção, use `npm run build`.
+
+## Publicar na Vercel
+
+Importe este repositório na Vercel. O framework deve ser detectado como Next.js; mantenha a pasta raiz como diretório do projeto e use o comando padrão de build. Cada push na branch principal poderá iniciar um novo deployment.
