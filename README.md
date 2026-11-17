@@ -11,7 +11,16 @@ Demonstração de um painel integrado em Next.js, React e Tailwind CSS. Todos os
 - Detector de metais
 - Equipamentos offline
 
-Cada módulo exibe cinco linhas fictícias e uma autoria simulada. O painel geral reúne indicadores, gráfico, atividade recente e atalhos. Inclui busca, filtro por período e exportação CSV. Ainda não há autenticação, banco de dados nem gravação de alterações.
+Cada módulo exibe cinco linhas fictícias e uma autoria simulada. O painel geral reúne indicadores, gráfico, atividade recente e atalhos. Inclui busca, filtro por período e exportação CSV. A autenticação por e-mail/senha e a leitura dos registros usam Supabase quando as variáveis de ambiente estão configuradas. Sem configuração, a interface permanece em modo de demonstração.
+
+## Conectar ao Supabase
+
+1. Aplique a migração em `supabase/migrations/202611170001_initial_schema.sql` pelo SQL Editor do Supabase.
+2. Copie `.env.example` para `.env.local` e preencha a URL do projeto e a chave pública (`publishable key`).
+3. Configure as mesmas variáveis no projeto Vercel e faça um novo deployment.
+4. Crie/convide os usuários em Supabase Authentication; o painel não oferece cadastro público.
+
+Quando conectado, o painel exige login e consulta até 500 registros recentes por módulo. A autoria é associada a `profiles` via `created_by`. A interface ainda não inclui formulários de criação/edição; os dados existentes são exibidos e podem ser exportados em CSV.
 
 ## Executar localmente
 
