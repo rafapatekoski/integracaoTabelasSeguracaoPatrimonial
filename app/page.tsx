@@ -68,6 +68,11 @@ export default function Home() {
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [recoveryMessage, setRecoveryMessage] = useState("");
+  const [recoveryError, setRecoveryError] = useState("");
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
   const [databaseRows, setDatabaseRows] = useState<Record<string, string[][]>>({});
   const [dataLoading, setDataLoading] = useState(false);
   const [dataError, setDataError] = useState("");
@@ -77,10 +82,12 @@ export default function Home() {
   useEffect(() => {
     if (!supabase) { setAuthReady(true); return; }
     let mounted = true;
+    if (typeof window !== "undefined" && window.location.hash.includes("type=recovery")) setPasswordRecovery(true);
     supabase.auth.getSession().then(({ data }) => {
       if (mounted) { setAuthUser(data.session?.user ? { id: data.session.user.id, email: data.session.user.email } : null); setAuthReady(true); }
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (mounted && event === "PASSWORD_RECOVERY") setPasswordRecovery(true);
       if (mounted) setAuthUser(session?.user ? { id: session.user.id, email: session.user.email } : null);
     });
     return () => { mounted = false; subscription.unsubscribe(); };
@@ -133,6 +140,31 @@ export default function Home() {
   }
   async function handleLogout() { await supabase?.auth.signOut(); setCurrent("inicio"); }
 
+  async function handlePasswordRecovery(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setRecoveryError(""); setRecoveryMessage(""); setRecoveryBusy(true);
+    if (!supabase) { setRecoveryError("Supabase não está configurado."); setRecoveryBusy(false); return; }
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) setRecoveryError(error.message);
+    else {
+      setRecoveryMessage("Senha alterada. Você já pode entrar com a nova senha.");
+      setNewPassword("");
+      window.history.replaceState(null, "", window.location.pathname);
+      setPasswordRecovery(false);
+    }
+    setRecoveryBusy(false);
+  }
+
+  async function requestPasswordRecovery() {
+    setRecoveryError(""); setRecoveryMessage(""); setLoginError("");
+    if (!supabase) { setLoginError("Supabase não está configurado."); return; }
+    if (!loginEmail) { setLoginError("Informe seu e-mail para receber o link de recuperação."); return; }
+    setLoginBusy(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(loginEmail, { redirectTo: window.location.origin });
+    if (error) setLoginError(error.message);
+    else setRecoveryMessage("Se esse e-mail estiver cadastrado, você receberá um link para redefinir a senha.");
+    setLoginBusy(false);
+  }
+
   function go(id: string) {
     setCurrent(id);
     setQuery("");
@@ -166,8 +198,9 @@ export default function Home() {
   const kpis = [["Registros carregados", String(viewModules.reduce((total, module) => total + module.rows.length, 0)), authUser ? "Até 500 recentes por módulo" : "30 linhas inventadas", "▤"], ["Áreas integradas", "6", "Módulos no portal", "▦"], ["Usuários", authUser ? "Autenticado" : "4 exemplos", authUser?.email ?? "Autoria simulada", "♙"], ["Fonte dos dados", authUser ? "Supabase" : "Demonstração", authUser ? "Sessão autenticada" : "Dados inventados", "◷"]];
 
 
+  if (hasSupabaseConfig && passwordRecovery) return <main className="grid min-h-screen place-items-center bg-zinc-950 px-4 text-zinc-100"><form onSubmit={handlePasswordRecovery} className="w-full max-w-sm rounded-2xl border border-white/10 bg-zinc-900/70 p-7 shadow-2xl backdrop-blur-xl"><div className="mb-6"><div className="mb-4 grid size-11 place-items-center rounded-xl border border-white/10 bg-zinc-800 font-semibold text-lime-300">OP</div><h1 className="text-xl font-medium tracking-tight">Definir nova senha</h1><p className="mt-2 text-sm text-zinc-400">Escolha uma senha nova para acessar o painel.</p></div><label className="mb-2 block text-xs text-zinc-400" htmlFor="new-password">Nova senha</label><input id="new-password" type="password" required minLength={6} autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="mb-4 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm outline-none focus:border-lime-300/50"/>{recoveryError && <p role="alert" className="mb-3 text-xs text-rose-300">{recoveryError}</p>}{recoveryMessage && <p role="status" className="mb-3 text-xs text-emerald-300">{recoveryMessage}</p>}<button disabled={recoveryBusy} className="w-full rounded-lg bg-lime-300 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-lime-200 disabled:opacity-60">{recoveryBusy ? "Salvando…" : "Salvar nova senha"}</button></form></main>;
   if (hasSupabaseConfig && !authReady) return <main className="grid min-h-screen place-items-center bg-zinc-950 text-zinc-300">Verificando sessão do Supabase…</main>;
-  if (hasSupabaseConfig && !authUser) return <main className="grid min-h-screen place-items-center bg-zinc-950 px-4 text-zinc-100"><form onSubmit={handleLogin} className="w-full max-w-sm rounded-2xl border border-white/10 bg-zinc-900/70 p-7 shadow-2xl backdrop-blur-xl"><div className="mb-6"><div className="mb-4 grid size-11 place-items-center rounded-xl border border-white/10 bg-zinc-800 font-semibold text-lime-300">OP</div><h1 className="text-xl font-medium tracking-tight">Acessar painel operacional</h1><p className="mt-2 text-sm text-zinc-400">Entre com seu usuário autorizado.</p></div><label className="mb-2 block text-xs text-zinc-400" htmlFor="login-email">E-mail</label><input id="login-email" type="email" required autoComplete="username" value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} className="mb-4 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm outline-none focus:border-lime-300/50"/><label className="mb-2 block text-xs text-zinc-400" htmlFor="login-password">Senha</label><input id="login-password" type="password" required autoComplete="current-password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} className="mb-4 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm outline-none focus:border-lime-300/50"/>{loginError && <p role="alert" className="mb-3 text-xs text-rose-300">{loginError}</p>}<button disabled={loginBusy} className="w-full rounded-lg bg-lime-300 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-lime-200 disabled:opacity-60">{loginBusy ? "Entrando…" : "Entrar"}</button><p className="mt-4 text-center text-[11px] leading-relaxed text-zinc-500">Acesso por convite. Peça ao administrador para criar sua conta.</p></form></main>;
+  if (hasSupabaseConfig && !authUser) return <main className="grid min-h-screen place-items-center bg-zinc-950 px-4 text-zinc-100"><form onSubmit={handleLogin} className="w-full max-w-sm rounded-2xl border border-white/10 bg-zinc-900/70 p-7 shadow-2xl backdrop-blur-xl"><div className="mb-6"><div className="mb-4 grid size-11 place-items-center rounded-xl border border-white/10 bg-zinc-800 font-semibold text-lime-300">OP</div><h1 className="text-xl font-medium tracking-tight">Acessar painel operacional</h1><p className="mt-2 text-sm text-zinc-400">Entre com seu usuário autorizado.</p></div><label className="mb-2 block text-xs text-zinc-400" htmlFor="login-email">E-mail</label><input id="login-email" type="email" required autoComplete="username" value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} className="mb-4 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm outline-none focus:border-lime-300/50"/><label className="mb-2 block text-xs text-zinc-400" htmlFor="login-password">Senha</label><input id="login-password" type="password" required autoComplete="current-password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} className="mb-4 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm outline-none focus:border-lime-300/50"/>{loginError && <p role="alert" className="mb-3 text-xs text-rose-300">{loginError}</p>}<button disabled={loginBusy} className="w-full rounded-lg bg-lime-300 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-lime-200 disabled:opacity-60">{loginBusy ? "Entrando…" : "Entrar"}</button><button type="button" onClick={requestPasswordRecovery} disabled={loginBusy} className="mt-3 w-full text-xs text-zinc-400 transition-colors hover:text-white disabled:opacity-60">Esqueci minha senha</button>{recoveryMessage && <p role="status" className="mt-3 text-center text-xs text-emerald-300">{recoveryMessage}</p>}<p className="mt-4 text-center text-[11px] leading-relaxed text-zinc-500">Acesso por convite. Peça ao administrador para criar sua conta.</p></form></main>;
 
   return <div className="min-h-screen bg-zinc-950 text-zinc-100">
     <div className="min-h-screen lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
