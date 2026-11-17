@@ -88,6 +88,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!supabase || !authUser) { setDatabaseRows({}); return; }
+    const client = supabase;
     let cancelled = false;
     const specs = [
       { id: "transito", table: "traffic_inspections", date: "inspected_at", map: (r: DbRecord, author: string) => [dateValue(r.inspected_at), display(r.activity_type), display(r.vehicle), display(r.plate), display(r.violation), display(r.status), author] },
@@ -99,11 +100,11 @@ export default function Home() {
     ];
     async function loadData() {
       setDataLoading(true); setDataError("");
-      const profileResult = await supabase.from("profiles").select("id, display_name");
+      const profileResult = await client.from("profiles").select("id, display_name");
       if (profileResult.error) { if (!cancelled) { setDataError(profileResult.error.message); setDataLoading(false); } return; }
       const profileMap = new Map(((profileResult.data ?? []) as Profile[]).map((profile) => [profile.id, profile.display_name || profile.id.slice(0, 8)]));
       const results = await Promise.all(specs.map(async (spec) => {
-        const result = await supabase.from(spec.table).select("*").order(spec.date, { ascending: false, nullsFirst: false }).limit(500);
+        const result = await client.from(spec.table).select("*").order(spec.date, { ascending: false, nullsFirst: false }).limit(500);
         if (result.error) throw new Error(result.error.message);
         const rows = ((result.data ?? []) as DbRecord[]).map((row) => spec.map(row, row.created_by ? profileMap.get(row.created_by) ?? "Usuário" : "Sem autoria histórica"));
         return [spec.id, rows] as const;
