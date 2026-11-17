@@ -304,7 +304,7 @@ security definer
 set search_path = ''
 as $$
 begin
-  if public.current_app_role() <> 'admin' then
+  if public.current_app_role() is distinct from 'admin' then
     raise exception 'Apenas administradores podem alterar papéis.' using errcode = '42501';
   end if;
   update public.profiles set role = target_role where id = target_user_id;
@@ -313,6 +313,7 @@ begin
   end if;
 end;
 $$;
+revoke all on function public.set_user_role(uuid, public.app_role) from public, anon;
 grant execute on function public.set_user_role(uuid, public.app_role) to authenticated;
 
 alter table public.audit_log enable row level security;
