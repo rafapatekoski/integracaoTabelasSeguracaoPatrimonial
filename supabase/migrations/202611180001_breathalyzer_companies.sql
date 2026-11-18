@@ -1,0 +1,10 @@
+create table public.breathalyzer_companies (id uuid primary key default extensions.gen_random_uuid(), name text not null check (length(trim(name))>0), created_by uuid references public.profiles(id), updated_by uuid references public.profiles(id), created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create unique index breathalyzer_companies_name_unique on public.breathalyzer_companies (lower(trim(name)));
+alter table public.breathalyzer_companies enable row level security;
+grant select,insert,update,delete on public.breathalyzer_companies to authenticated;
+create policy breathalyzer_companies_read on public.breathalyzer_companies for select to authenticated using (true);
+create policy breathalyzer_companies_insert on public.breathalyzer_companies for insert to authenticated with check (public.current_app_role() in ('admin','supervisor'));
+create policy breathalyzer_companies_update on public.breathalyzer_companies for update to authenticated using (public.current_app_role() in ('admin','supervisor')) with check (public.current_app_role() in ('admin','supervisor'));
+create policy breathalyzer_companies_delete on public.breathalyzer_companies for delete to authenticated using (public.current_app_role()='admin');
+create trigger stamp_metadata before insert or update on public.breathalyzer_companies for each row execute function public.stamp_record_metadata();
+create trigger audit_changes after insert or update or delete on public.breathalyzer_companies for each row execute function public.write_audit_log();
