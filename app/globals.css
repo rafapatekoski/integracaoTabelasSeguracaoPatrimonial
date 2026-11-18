@@ -16,3 +16,15 @@ button { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+@media print {
+  :root, html, body { background: #fff !important; color: #111 !important; color-scheme: light; }
+  body { min-height: auto; }
+  main { background: #fff !important; color: #111 !important; }
+  article, section, table, tr { break-inside: avoid; }
+  button, input, select, textarea { display: none !important; }
+  .bg-zinc-900\/70, .bg-zinc-950, .bg-zinc-800\/50 { background: #fff !important; }
+  .text-zinc-100, .text-zinc-200, .text-zinc-300, .text-zinc-400, .text-zinc-500 { color: #222 !important; }
+  .border-white\/10, .border-white\/5 { border-color: #ddd !important; }
+}
+
