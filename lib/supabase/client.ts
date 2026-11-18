@@ -1,26 +1,15 @@
 "use client";
 
-import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 let client: SupabaseClient | undefined;
-
 export function createClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-
-  if (!url || !publishableKey) {
-    throw new Error("As variáveis do Supabase não estão configuradas.");
-  }
-
-  if (!client) {
-    client = createSupabaseClient(url, publishableKey, {
-      auth: {
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-        persistSession: true,
-      },
-    });
-  }
-
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !key) throw new Error("As variáveis do Supabase não estão configuradas.");
+  if (!client) client = createBrowserClient(url, key, {
+    auth: { flowType: "implicit", detectSessionInUrl: true },
+  });
   return client;
 }
