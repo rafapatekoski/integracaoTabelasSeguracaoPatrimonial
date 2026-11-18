@@ -29,3 +29,10 @@ where id = (select id from auth.users where email = 'seu-email@exemplo.com');
 Esta migração não importa registros nem usa os conteúdos atuais das planilhas. Campos de autor das linhas históricas devem permanecer nulos, pois os arquivos não identificam com segurança quem digitou cada linha. Motorista, vigilante ou inspetor são campos de negócio e não substituem o usuário que registrou o dado.
 
 As tabelas foram modeladas a partir dos cabeçalhos das planilhas disponíveis. Recomenda-se validar campos opcionais e regras de negócio com usuários do processo antes da carga histórica.
+
+
+## Módulo de controle de equipamentos
+
+Depois de aplicar a migração inicial, execute também `migrations/202611170002_equipment_control.sql` no SQL Editor. Ela cria cadastros de setores, categorias, equipamentos e tipos de falha, além das regras para calcular indisponibilidade, meta de reparo, atraso e status das ocorrências.
+
+No site, comece por **Cadastro → Setores e Categorias**, depois cadastre os equipamentos e tipos de falha. A tela de lançamentos usa esses cadastros e vincula automaticamente a autoria ao usuário autenticado. O dashboard e os relatórios são calculados com os dados do banco; nenhuma linha histórica do Excel é importada por essa migração.
