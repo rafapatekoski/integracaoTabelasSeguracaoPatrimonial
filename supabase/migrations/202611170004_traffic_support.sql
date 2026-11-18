@@ -1,0 +1,11 @@
+alter table public.traffic_inspections add column if not exists cnh_original text;
+create table if not exists public.traffic_support (id uuid primary key default extensions.gen_random_uuid(), kind text not null, name text not null, code text, classification text, created_by uuid references public.profiles(id), updated_by uuid references public.profiles(id), created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create unique index if not exists traffic_support_unique on public.traffic_support(kind,lower(trim(name)),coalesce(code,''));
+alter table public.traffic_support enable row level security;
+grant select,insert,update,delete on public.traffic_support to authenticated;
+create policy traffic_support_read on public.traffic_support for select to authenticated using (true);
+create policy traffic_support_insert on public.traffic_support for insert to authenticated with check (public.current_app_role() in ('admin','supervisor'));
+create policy traffic_support_update on public.traffic_support for update to authenticated using (public.current_app_role() in ('admin','supervisor')) with check (public.current_app_role() in ('admin','supervisor'));
+create policy traffic_support_delete on public.traffic_support for delete to authenticated using (public.current_app_role()='admin');
+create trigger stamp_metadata before insert or update on public.traffic_support for each row execute function public.stamp_record_metadata();
+create trigger audit_changes after insert or update or delete on public.traffic_support for each row execute function public.write_audit_log();
